@@ -236,8 +236,11 @@ else # Client
         begin
             $stderr.puts "Opening connection over HTTP bridge for #{remote_host}:#{remote_port} (#{conn_id})"
             # HACK! new().start() because of https://bugs.ruby-lang.org/issues/13351
-            Net::HTTP.new(url.host, url.port).start do |http|
+            x = Net::HTTP.new(url.host, url.port)
+            x.use_ssl = true
+            x.start do |http|
                 error=nil
+                http.use_ssl = true
                 res = http.post("#{url.path}/#{conn_id}","#{remote_host}:#{remote_port}")
                 if res.kind_of? Net::HTTPCreated
                     connected=true
@@ -259,9 +262,12 @@ else # Client
         Thread.new do
             $stderr.puts "Local write/Remote read loop started"
             begin
-                Net::HTTP.new(url.host, url.port).start do |http|
+                x = Net::HTTP.new(url.host, url.port)
+                x.use_ssl = true
+                x.start do |http|
                     http.read_timeout=READ_TIMEOUT+3
                     while connected
+                        http.use_ssl = true
                         res = http.get("#{url.path}/#{conn_id}") {|res| _out.print res }
                         if res.kind_of? Net::HTTPGone
                             $stderr.puts "Connection closed in remote location (lw/rr)"
@@ -305,7 +311,9 @@ else # Client
         # Keep buffer between retries
         buf=nil
         begin
-            Net::HTTP.new(url.host, url.port).start do |http|
+            x = Net::HTTP.new(url.host, url.port)
+            x.use_ssl = true
+            x.start do |http|
                 while connected
                     begin
                         # first read from _in ONLY if buf is empty
@@ -316,11 +324,13 @@ else # Client
                     rescue EOFError
                         $stderr.puts "Local connection closed (lr/rw)"
                         $stderr.puts "Closing bridge connection to remote location"
+                        http.use_ssl = true
                         http.delete("#{url.path}/#{conn_id}")
                         connected=false
                         break
                     end
 
+                    http.use_ssl = true
                     res = http.put("#{url.path}/#{conn_id}",buf)
                     if res.kind_of? Net::HTTPGone
                         $stderr.puts "Connection closed in remote location (lr/rw)"
